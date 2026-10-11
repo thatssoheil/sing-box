@@ -39,6 +39,21 @@ func newRawSpoofer(conn net.Conn, method Method) (rawSpoofer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Bind the raw socket to the connection's local address so the kernel
+	// resolves the forged segment's route with the same source address as the
+	// real connection (raw_darwin.go binds its AF_INET6 socket the same way).
+	// Left unbound, the route lookup uses 0.0.0.0 and auto_route's
+	// "from 0.0.0.0 iif lo lookup <table>" policy rule captures it, sending
+	// the forged segment back into the tun device.
+	if src.Addr().Is4() {
+		err = unix.Bind(fd, &unix.SockaddrInet4{Addr: src.Addr().As4()})
+	} else {
+		err = unix.Bind(fd, &unix.SockaddrInet6{Addr: src.Addr().As16()})
+	}
+	if err != nil {
+		unix.Close(fd)
+		return nil, E.Cause(err, "bind raw socket to ", src.Addr())
+	}
 	spoofer := &linuxSpoofer{
 		method:      method,
 		src:         src,
