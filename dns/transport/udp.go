@@ -160,9 +160,15 @@ func (t *UDPTransport) writeQuery(conn net.Conn, message *mDNS.Msg, queryId uint
 func (t *UDPTransport) readResponse(conn net.Conn) (*mDNS.Msg, error) {
 	buffer := buf.NewSize(int(t.udpSize.Load()))
 	defer buffer.Release()
-	_, err := buffer.ReadOnceFrom(conn)
+	readN, err := buffer.ReadOnceFrom(conn)
 	if err != nil {
 		return nil, err
+	}
+	if readN == 0 {
+		// A read completing without any data is not a usable response, and a
+		// connection left in that state would be polled forever by the
+		// receive loop.
+		return nil, E.New("unexpected empty response")
 	}
 	var message mDNS.Msg
 	err = message.Unpack(buffer.Bytes())

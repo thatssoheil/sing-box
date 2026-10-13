@@ -29,6 +29,11 @@ const (
 	reuseProbeQueryIdB uint16 = 2
 )
 
+// discardedResponseLimit is the number of consecutive discarded responses
+// after which a connection is considered dead and invalidated, instead of
+// being retried forever without making any progress.
+const discardedResponseLimit = 3
+
 type queryMultiplexerOptions struct {
 	dial           func(ctx context.Context) (net.Conn, error)
 	write          func(conn net.Conn, message *mDNS.Msg, queryId uint16) error
@@ -446,6 +451,7 @@ func (m *queryMultiplexer) completeContextDone(queryId uint16, ctx context.Conte
 }
 
 func (m *queryMultiplexer) recvLoop(conn *multiplexConn) {
+	var discardedCount int
 	for {
 		message, err := m.options.readNext(conn)
 		if err != nil {
@@ -455,8 +461,17 @@ func (m *queryMultiplexer) recvLoop(conn *multiplexConn) {
 		}
 		conn.readEpoch.Add(1)
 		if message == nil {
+			discardedCount++
+			if discardedCount >= discardedResponseLimit {
+				// Reads keep completing without a usable message; the
+				// connection is not going to recover on its own.
+				m.recordConnDeath(conn)
+				m.connection.Invalidate(conn, &queryMultiplexerReadError{cause: E.New("too many discarded responses")})
+				return
+			}
 			continue
 		}
+		discardedCount = 0
 		m.complete(message.Id, message, nil, true)
 	}
 }
