@@ -46,10 +46,30 @@ func isSystemdResolvedManaged() bool {
 			return false
 		}
 		if strings.Contains(line, "systemd-resolved") {
-			return true
+			return hasSystemdResolvedOwner()
 		}
 	}
 	return false
+}
+
+// hasSystemdResolvedOwner reports whether systemd-resolved is running by
+// checking that it currently owns its D-Bus name. A comment mentioning
+// systemd-resolved is not proof that it is in use: Debian's resolvconf package
+// writes one into every generated file, and the name stays activatable
+// whenever the service file is installed even with the service disabled.
+// Resolving through the service only works while it owns its name, so require
+// that before preferring it over the nameservers in the file.
+func hasSystemdResolvedOwner() bool {
+	systemBus, err := dbus.SystemBus()
+	if err != nil {
+		return false
+	}
+	var hasOwner bool
+	err = systemBus.BusObject().Call("org.freedesktop.DBus.NameHasOwner", 0, "org.freedesktop.resolve1").Store(&hasOwner)
+	if err != nil {
+		return false
+	}
+	return hasOwner
 }
 
 type DBusResolvedResolver struct {
