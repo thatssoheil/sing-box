@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"runtime"
 	"strings"
@@ -23,6 +24,8 @@ import (
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
+	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
 	"github.com/sagernet/sing/service/filemanager"
 	"github.com/sagernet/ws"
@@ -157,7 +160,7 @@ func (s *Server) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 			err      error
 		)
 		for range 3 {
-			listener, err = net.Listen("tcp", s.httpServer.Addr)
+			listener, err = net.Listen(listenNetwork(s.httpServer.Addr), s.httpServer.Addr)
 			if runtime.GOOS == "android" && errors.Is(err, syscall.EADDRINUSE) {
 				time.Sleep(100 * time.Millisecond)
 				continue
@@ -177,6 +180,13 @@ func (s *Server) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 		}()
 	}
 	return nil
+}
+
+func listenNetwork(addr string) string {
+	if addrPort, err := netip.ParseAddrPort(addr); err == nil {
+		return M.NetworkFromNetAddr(N.NetworkTCP, addrPort.Addr())
+	}
+	return N.NetworkTCP
 }
 
 func authentication(serverSecret string) func(next http.Handler) http.Handler {
