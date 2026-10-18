@@ -64,6 +64,10 @@ func (h *Redirect) NewConnection(ctx context.Context, conn net.Conn, metadata ad
 	metadata.Inbound = h.Tag()
 	metadata.InboundType = h.Type()
 	metadata.Destination = M.SocksaddrFromNetIP(destination)
+	// The accept address is the redirect listener, not the address the
+	// originating socket is connected to, so keep the original destination
+	// for process search.
+	metadata.OriginDestination = metadata.Destination
 	h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
 	h.router.RouteConnectionEx(ctx, conn, metadata, onClose)
 }
