@@ -5,10 +5,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -89,9 +87,7 @@ func NewHTTPS(ctx context.Context, logger log.ContextLogger, tag string, options
 	if destinationURL.Host == "" {
 		destinationURL.Host = options.Server
 	}
-	if options.ServerPort != 0 && options.ServerPort != 443 {
-		destinationURL.Host = net.JoinHostPort(destinationURL.Host, strconv.Itoa(int(options.ServerPort)))
-	}
+	destinationURL.Host = URLHost(destinationURL.Host, options.ServerPort)
 	path := options.Path
 	if path == "" {
 		path = "/dns-query"
